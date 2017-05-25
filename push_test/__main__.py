@@ -59,13 +59,15 @@ def main():
         `data`.
     Then `ack`s the response.
     And calls `done` to clean up.
-    
+    A "done" will be appended if not present.
     
     """
+    if tasks[-1][0] != "done":
+        tasks.append(("done", {}))
     loop = asyncio.get_event_loop()
     loop.set_debug(args.debug)
 
-    client = PushClient({}, loop)
+    client = PushClient(args, loop)
     client.tasks = tasks
 
     try:
