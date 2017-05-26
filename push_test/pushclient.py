@@ -23,6 +23,7 @@ class PushClient(object):
         self.pushEndpoint = None
         self.channelID = None
         self.notifications = []
+        self.uaid = None
 
     def _next_task(self):
         task = self.tasks.pop(0)
@@ -36,8 +37,7 @@ class PushClient(object):
     
         """
         if not self.connection:
-            self.connection = await websockets.connect(
-                self.config.server or server)
+            await self.connect(server)
         self. recv = asyncio.ensure_future(self.receiver())
         cmd, args = self._next_task()
         await getattr(self, cmd)(**args)
@@ -82,6 +82,27 @@ class PushClient(object):
         message = await self.connection.recv()
         await self.process(json.loads(message))
 
+    async def connect(self, server=None, **kwargs):
+        """Connect to a remote websocket server
+        
+        :param server: Websocket url
+        :param kwargs: ignored
+        :return: 
+        
+        """
+        self.connection = await websockets.connect(self.config.server or server)
+
+    async def close(self, **kwargs):
+        """Close the websocket connection (if needed)
+        
+        :param kwargs: ignored
+        :return: 
+        
+        """
+        if self.connection and self.connection.state == 1:
+            await self.connection.close()
+            await self.connection.close_connection()
+
     async def hello(self, uaid=None, **kwargs):
         """Send a websocket "hello" message
         
@@ -89,9 +110,12 @@ class PushClient(object):
         
         """
         output(status="Sending Hello")
-
-        await self.send(messageType="hello", use_webpush=1,
-                        uaid=uaid, **kwargs)
+        args = dict(messageType="hello", use_webpush=1, **kwargs)
+        if uaid:
+            args['uaid'] = uaid
+        elif self.uaid:
+            args['uaid'] = self.uaid
+        await self.send(**args)
 
     async def ack(self, channelID=None, version=None, **kwargs):
         """Acknowledge a previous mesage
@@ -139,7 +163,7 @@ class PushClient(object):
         
         """
         output(status="done")
-        await self.connection.close()
+        await self.close()
         self.recv.cancel()
 
     async def recv_hello(self, **msg):
